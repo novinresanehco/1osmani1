@@ -1,0 +1,5 @@
+{
+  "name": "Virtual Try-on",
+  "description": "An application that allows users to upload a photo of their face and virtually try on different models of eyeglasses and sunglasses from various brands using generative AI.",
+  "requestFramePermissions": []
+}
