@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SENATOR OPTICS</title>
+    <title>SENATOR OPTICS - Virtual Try-On</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script type="importmap">
@@ -55,13 +55,45 @@
         font-family: var(--font-english) !important;
     }
     
-    .markdown-output p {
-        margin-bottom: 1rem;
+    .comparator {
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        max-width: 500px;
+        aspect-ratio: 1 / 1;
+        border: 2px solid var(--color-gold);
+        border-radius: 0.5rem;
     }
-    .markdown-output ul {
-        list-style-type: disc;
-        margin-left: 1.5rem;
-        margin-bottom: 1rem;
+    .comparator img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        pointer-events: none;
+    }
+    .comparator .edited {
+        clip-path: inset(0 50% 0 0);
+    }
+    .comparator .slider {
+        position: absolute;
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        outline: none;
+        margin: 0;
+        cursor: col-resize;
+    }
+    .comparator .slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 4px;
+        height: 100%;
+        background: var(--color-gold);
+        cursor: col-resize;
     }
 </style>
 </head>
@@ -70,58 +102,43 @@
     <script type="module">
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { marked } from 'https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js';
 
 // --- START: constants.ts ---
 const EYEGLASS_BRANDS = [
     {
         brandName: "Ray-Ban",
         models: [
-            { name: "Aviator (Sunglass)", prompt: "classic Ray-Ban Aviator sunglasses (model 3025) with a gold metal frame and dark green G-15 lenses" },
-            { name: "Wayfarer (Sunglass)", prompt: "iconic Ray-Ban Wayfarer sunglasses (model 2140) in polished black acetate with green G-15 lenses" },
-            { name: "Clubmaster (Optical)", prompt: "Ray-Ban Clubmaster eyeglasses with a black browline and gold metal rims" },
-            { name: "Round Metal (Optical)", prompt: "Ray-Ban Round Metal eyeglasses (model RX3447V) with a thin gold frame" }
+            { name: "Aviator (Sunglass)", prompt: "Place classic Ray-Ban Aviator sunglasses (model 3025) with a gold metal frame and dark green G-15 lenses onto the person's face, ensuring a natural and realistic fit." },
+            { name: "Wayfarer (Sunglass)", prompt: "Place iconic Ray-Ban Wayfarer sunglasses (model 2140) in polished black acetate with green G-15 lenses onto the person's face, ensuring a natural and realistic fit." },
+            { name: "Clubmaster (Optical)", prompt: "Place Ray-Ban Clubmaster eyeglasses with a black browline and gold metal rims onto the person's face, ensuring a natural and realistic fit." },
         ]
     },
     {
         brandName: "Oakley",
         models: [
-            { name: "Holbrook (Sunglass)", prompt: "Oakley Holbrook sunglasses with a matte black frame and Prizm Sapphire Iridium lenses" },
-            { name: "Sutro (Sunglass)", prompt: "large, shield-style Oakley Sutro sunglasses with a black frame and Prizm Road lens" },
-            { name: "Holbrook (Optical)", prompt: "Oakley Holbrook eyeglasses with a matte black frame" },
-            { name: "Metalink (Optical)", prompt: "Oakley Metalink eyeglasses with a satin black rectangular frame" }
+            { name: "Holbrook (Sunglass)", prompt: "Place Oakley Holbrook sunglasses with a matte black frame and Prizm Sapphire Iridium lenses onto the person's face, ensuring a natural and realistic fit." },
+            { name: "Sutro (Sunglass)", prompt: "Place large, shield-style Oakley Sutro sunglasses with a black frame and Prizm Road lens onto the person's face, ensuring a natural and realistic fit." },
         ]
     },
     {
         brandName: "Gucci",
         models: [
-            { name: "Square Sunglass", prompt: "oversized Gucci square sunglasses in black acetate with the gold interlocking G logo" },
-            { name: "Aviator Sunglass", prompt: "Gucci aviator sunglasses with a gold metal frame and a double bridge" },
-            { name: "Rectangular Optical", prompt: "Gucci rectangular eyeglasses in a shiny black acetate frame" },
+            { name: "Square Sunglass", prompt: "Place oversized Gucci square sunglasses in black acetate with the gold interlocking G logo onto the person's face, ensuring a natural and realistic fit." },
+            { name: "Rectangular Optical", prompt: "Place Gucci rectangular eyeglasses in a shiny black acetate frame onto the person's face, ensuring a natural and realistic fit." },
         ]
     },
-    {
-        brandName: "Persol",
-        models: [
-            { name: "649 (Sunglass)", prompt: "iconic Persol 649 sunglasses in a havana tortoise-shell acetate frame with the signature silver arrow hinge" },
-            { name: "714 (Sunglass)", prompt: "foldable Persol 714 'Steve McQueen' sunglasses in a light havana frame" },
-            { name: "Cellor (Optical)", prompt: "Persol Cellor eyeglasses with a black acetate browline and metal lower rims" },
-        ]
-    }
 ];
 // --- END: constants.ts ---
 
 
 // --- START: services/geminiService.ts ---
-const getStyleAdvice = async (image, prompt) => {
+const editImageWithGemini = async (image, prompt) => {
     const WORKER_URL = '/api';
 
     try {
         const response = await fetch(WORKER_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 imageBase64: image.base64,
                 mimeType: image.mimeType,
@@ -130,32 +147,21 @@ const getStyleAdvice = async (image, prompt) => {
         });
         
         if (!response.ok) {
-            let errorMsg = `خطای سرور: ${response.status}`;
-            try {
-                const errorData = await response.json();
-                if (errorData.error) {
-                    errorMsg = errorData.error;
-                }
-            } catch (e) {
-                console.log("Could not parse error response as JSON.");
-            }
-            throw new Error(errorMsg);
+            const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response.' }));
+            throw new Error(errorData.error || `Server responded with status ${response.status}`);
         }
 
         const data = await response.json();
         
-        if (!data.styleAdvice) {
-            throw new Error('پاسخ سرور فاقد مشاوره استایل بود.');
+        if (!data.newImageBase64) {
+            throw new Error('Server response did not contain the new image.');
         }
 
-        return data.styleAdvice;
+        return data.newImageBase64;
 
     } catch (err) {
         console.error("Worker fetch error:", err);
-        const friendlyMessage = err.message.includes('Failed to fetch') 
-            ? 'خطا در اتصال به سرور. لطفاً از اتصال اینترنت خود و صحیح بودن آدرس ورکر اطمینان حاصل کنید.'
-            : `خطا: ${err.message}. لطفاً تنظیمات ورکر Cloudflare خود را بررسی کنید (کلید API، Project ID، و فعال بودن Vertex AI API).`;
-        throw new Error(friendlyMessage);
+        throw new Error(`خطا: ${err.message}. لطفاً دوباره امتحان کنید و از صحت تنظیمات ورکر Cloudflare اطمینان حاصل کنید.`);
     }
 };
 // --- END: services/geminiService.ts ---
@@ -172,41 +178,48 @@ const Loader = ({ message }) => {
 };
 // --- END: components/Loader.tsx ---
 
+// --- START: components/ImageComparator.tsx ---
+const ImageComparator = ({ originalSrc, editedSrc }) => {
+    const sliderRef = useRef(null);
+    const editedImageRef = useRef(null);
 
-// --- START: components/StyleAdviceCard.tsx ---
-const StyleAdviceCard = ({ advice, imageUrl }) => {
-    const parsedHtml = marked(advice);
+    useEffect(() => {
+        const slider = sliderRef.current;
+        const editedImage = editedImageRef.current;
+        if (slider && editedImage) {
+            const handleInput = () => {
+                editedImage.style.clipPath = `inset(0 ${100 - slider.value}% 0 0)`;
+            };
+            slider.addEventListener('input', handleInput);
+            return () => slider.removeEventListener('input', handleInput);
+        }
+    }, []);
+
     return (
-        React.createElement('div', {className: "w-full max-w-4xl mx-auto flex flex-col md:flex-row items-center md:items-start gap-6 bg-black/70 border border-amber-500/30 rounded-lg p-6 backdrop-blur-sm"},
-            React.createElement('img', {
-                src: imageUrl,
-                alt: "Your photo",
-                className: "w-48 h-48 object-cover rounded-lg shadow-lg border-2 border-amber-500/50"
-            }),
-            React.createElement('div', {className: "text-right flex-1"},
-                React.createElement('h3', {className: "text-2xl font-bold text-amber-400 mb-4 border-b-2 border-amber-500/30 pb-2"}, "مشاوره استایل شما"),
-                React.createElement('div', {
-                    className: "text-gray-200 leading-relaxed markdown-output",
-                    dangerouslySetInnerHTML: { __html: parsedHtml }
-                })
-            )
+        React.createElement('div', { className: "comparator shadow-2xl" },
+            React.createElement('img', { src: originalSrc, alt: "Original" }),
+            React.createElement('img', { ref: editedImageRef, src: editedSrc, alt: "Edited", className: "edited" }),
+            React.createElement('input', {
+                ref: sliderRef,
+                type: 'range',
+                min: '0',
+                max: '100',
+                defaultValue: '50',
+                className: 'slider'
+            })
         )
     );
 };
-// --- END: components/StyleAdviceCard.tsx ---
+// --- END: components/ImageComparator.tsx ---
 
 
 // --- START: App.tsx ---
-const fileToImageData = async (file) => {
+const fileToImageData = (file) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
             const base64String = reader.result.split(',')[1];
-            if (base64String) {
-                resolve({ base64: base64String, mimeType: file.type, url: reader.result });
-            } else {
-                reject(new Error("Failed to read file as base64"));
-            }
+            resolve({ base64: base64String, mimeType: file.type, url: reader.result });
         };
         reader.onerror = error => reject(error);
         reader.readAsDataURL(file);
@@ -215,7 +228,7 @@ const fileToImageData = async (file) => {
 
 const App = () => {
     const [userImage, setUserImage] = useState(null);
-    const [styleAdvice, setStyleAdvice] = useState('');
+    const [editedImage, setEditedImage] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState(null);
@@ -228,43 +241,44 @@ const App = () => {
         const file = event.target.files?.[0];
         if (file) {
             setError(null);
-            setStyleAdvice('');
-            try {
-                const imageData = await fileToImageData(file);
-                setUserImage(imageData);
-            } catch (err) {
-                setError("Could not process the image file.");
-                console.error(err);
-            }
+            setEditedImage(null);
+            const imageData = await fileToImageData(file);
+            setUserImage(imageData);
         }
     };
 
-    const processStyleRequest = useCallback(async (stylePrompt) => {
+    const processTryOnRequest = useCallback(async (stylePrompt) => {
         if (!userImage) {
             setError("لطفاً ابتدا یک تصویر آپلود کنید.");
             return;
         }
         
         setIsLoading(true);
-        setLoadingMessage('هوش مصنوعی در حال تحلیل استایل شماست...');
+        setLoadingMessage('AI در حال قرار دادن عینک روی چهره شماست...');
         setError(null);
-        setStyleAdvice('');
+        setEditedImage(null);
 
         try {
-            const adviceText = await getStyleAdvice(userImage, stylePrompt);
-            setStyleAdvice(adviceText);
+            const newImageBase64 = await editImageWithGemini(userImage, stylePrompt);
+            const newImageUrl = `data:${userImage.mimeType};base64,${newImageBase64}`;
+            setEditedImage(newImageUrl);
         } catch (err) {
-            setError(err.message || "Failed to get style advice. Please try again.");
-            console.error(err);
+            setError(err.message);
         } finally {
             setIsLoading(false);
         }
     }, [userImage]);
+    
+    const handleReset = () => {
+        setUserImage(null);
+        setEditedImage(null);
+        setError(null);
+    };
 
     const WelcomeScreen = () => (
         React.createElement('div', { className: "text-center p-8" },
             React.createElement('h1', { className: "text-5xl font-bold mb-4 text-amber-400" }, "SENATOR OPTICS"),
-            React.createElement('p', { className: "text-xl text-gray-300 mb-8" }, "مشاور استایل هوشمند عینک شما"),
+            React.createElement('p', { className: "text-xl text-gray-300 mb-8" }, "تست مجازی عینک با هوش مصنوعی"),
             React.createElement('div', { className: "flex flex-col sm:flex-row justify-center items-center gap-4" },
                 React.createElement('button', { onClick: () => cameraInputRef.current?.click(), className: "w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 px-6 rounded-full flex items-center justify-center gap-3 transition-transform transform hover:scale-105" },
                     React.createElement('i', { className: "fas fa-camera text-xl" }),
@@ -294,13 +308,13 @@ const App = () => {
                 !userImage ? React.createElement(WelcomeScreen, null) : (
                     React.createElement('div', { className: "w-full flex flex-col items-center gap-6" },
                         
-                        styleAdvice ? 
-                            React.createElement(StyleAdviceCard, { advice: styleAdvice, imageUrl: userImage.url }) :
+                        editedImage ? 
+                            React.createElement(ImageComparator, { originalSrc: userImage.url, editedSrc: editedImage }) :
                             React.createElement('img', { src: userImage.url, alt: "Uploaded photo", className: "max-w-md w-full aspect-square object-cover rounded-lg shadow-2xl border-2 border-amber-500/30" }),
 
                         React.createElement('div', { className: "w-full max-w-4xl p-4 sm:p-6 bg-black/70 border border-amber-500/30 rounded-lg backdrop-blur-sm" },
                             React.createElement('div', { className: "w-full max-w-3xl mx-auto" },
-                                React.createElement('p', { className: "text-center text-gray-300 mb-4", dir: "rtl" }, "برای دریافت مشاوره استایل، یک مدل را انتخاب کنید:"),
+                                React.createElement('p', { className: "text-center text-gray-300 mb-4", dir: "rtl" }, "برای تست مجازی، یک مدل را انتخاب کنید:"),
                                 
                                 React.createElement('div', { className: "flex justify-center border-b border-amber-500/30 mb-4 flex-wrap" },
                                     EYEGLASS_BRANDS.map(brand => (
@@ -316,7 +330,7 @@ const App = () => {
                                     EYEGLASS_BRANDS.find(b => b.brandName === activeBrand)?.models.map(model => (
                                         React.createElement('button', { 
                                             key: model.name, 
-                                            onClick: () => processStyleRequest(model.prompt), 
+                                            onClick: () => processTryOnRequest(model.prompt), 
                                             disabled: isLoading, 
                                             className: "bg-black/50 border border-amber-500/50 hover:bg-amber-500/20 text-sm font-semibold py-2 px-4 rounded-full transition-colors disabled:bg-gray-800 disabled:text-gray-500 disabled:border-gray-700 disabled:cursor-not-allowed" 
                                         },
@@ -326,7 +340,7 @@ const App = () => {
                                 )
                             ),
                             React.createElement('div', { className: "flex flex-col sm:flex-row gap-4 mt-6 justify-center" },
-                                React.createElement('button', { onClick: () => { setUserImage(null); setStyleAdvice(''); }, disabled: isLoading, className: "bg-red-800/80 hover:bg-red-700 border border-red-600 text-white font-bold py-3 px-6 rounded-full flex items-center justify-center gap-3 transition-colors" },
+                                React.createElement('button', { onClick: handleReset, disabled: isLoading, className: "bg-red-800/80 hover:bg-red-700 border border-red-600 text-white font-bold py-3 px-6 rounded-full flex items-center justify-center gap-3 transition-colors" },
                                     React.createElement('i', { className: "fas fa-trash" }),
                                     React.createElement('span', null, "شروع مجدد")
                                 )
@@ -342,15 +356,8 @@ const App = () => {
 
 
 // --- START: index.tsx ---
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
-
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  React.createElement(React.StrictMode, null, React.createElement(App, null))
-);
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(React.StrictMode, null, React.createElement(App, null)));
 // --- END: index.tsx ---
     </script>
 </body>

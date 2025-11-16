@@ -1,7 +1,7 @@
 
 // This function is mapped to the `/api` route.
-// It's rewritten to use the Gemini API (which accepts a simple API key)
-// to provide style advice instead of editing an image.
+// It has been completely rewritten to use the `gemini-2.5-flash-image` model
+// for actual image editing (virtual try-on), which was the original goal.
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -10,22 +10,18 @@ const CORS_HEADERS = {
 };
 
 export async function onRequest(context) {
-  // Handle CORS preflight requests
   if (context.request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  // Ensure the request is a POST request
   if (context.request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: `Method Not Allowed. Only POST requests are accepted at /api.` }), {
+    return new Response(JSON.stringify({ error: 'Method Not Allowed. Only POST is accepted.' }), {
       status: 405,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
   }
 
   try {
-    // 1. Get the Gemini API Key from environment variables
-    // IMPORTANT: The variable name is now GEMINI_API_KEY
     const { GEMINI_API_KEY } = context.env;
     if (!GEMINI_API_KEY) {
       return new Response(JSON.stringify({ error: 'CRITICAL: Missing GEMINI_API_KEY in Cloudflare environment variables.' }), {
@@ -34,32 +30,24 @@ export async function onRequest(context) {
       });
     }
 
-    // 2. Parse the incoming request body
     const requestBody = await context.request.json();
-    const { imageBase64, mimeType, prompt: glassesStyle } = requestBody;
+    const { imageBase64, mimeType, prompt } = requestBody;
     
-    if (!imageBase64 || !mimeType || !glassesStyle) {
-      return new Response(JSON.stringify({ error: 'Client Error: Missing required fields. imageBase64, mimeType, and prompt are required.' }), {
+    if (!imageBase64 || !mimeType || !prompt) {
+      return new Response(JSON.stringify({ error: 'Client Error: Missing imageBase64, mimeType, or prompt.' }), {
         status: 400,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
 
-    // 3. Construct the detailed prompt for the AI stylist
-    const fullPrompt = `You are an expert fashion stylist specializing in eyewear, writing for a premium brand called SENATOR OPTICS. Analyze the provided image of a person's face. The user wants to know how a specific style of glasses would look on them. The glasses style is: "${glassesStyle}".
+    // This is the correct model for image generation/editing
+    const model = 'gemini-2.5-flash-image';
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-Provide a helpful, positive, and descriptive style recommendation in Persian. Structure your response using Markdown for better readability. Cover these points:
-- **تحلیل چهره:** How well would this style of glasses complement the person's face shape?
-- **ایجاد استایل:** What kind of impression or look would these glasses create (e.g., professional, trendy, classic)?
-- **پیشنهاد ست:** Suggest one or two occasions or outfits these glasses would be perfect for.
-
-Keep the tone encouraging, luxurious, and fashionable. Start with a welcoming sentence. Respond only in Persian.`;
-
-    // 4. Construct the request body for the Gemini API
     const geminiApiBody = {
       contents: [{
         parts: [
-          { text: fullPrompt },
+          { text: prompt },
           {
             inline_data: {
               mime_type: mimeType,
@@ -68,7 +56,10 @@ Keep the tone encouraging, luxurious, and fashionable. Start with a welcoming se
           },
         ],
       }],
-      // Add safety settings to prevent harmful content
+      // CRITICAL: This config tells the API to return an IMAGE
+      config: {
+          responseModalities: ['IMAGE'],
+      },
       safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -77,24 +68,16 @@ Keep the tone encouraging, luxurious, and fashionable. Start with a welcoming se
       ]
     };
 
-    // 5. Construct the Gemini API endpoint URL
-    const model = 'gemini-pro-vision'; // This model can understand images and text
-    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-
-    // 6. Make the fetch request to the Google Gemini API
     const geminiResponse = await fetch(geminiEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(geminiApiBody),
     });
 
-    // 7. Handle the response from Google
     const responseText = await geminiResponse.text();
     if (!geminiResponse.ok) {
         console.error("Google API Error Response Text:", responseText);
-        let detailedMessage = 'An unknown error occurred while communicating with Google AI.';
+        let detailedMessage = 'An unknown error occurred with Google AI.';
         try {
             const errorJson = JSON.parse(responseText);
             if (errorJson.error?.message) {
@@ -104,31 +87,33 @@ Keep the tone encouraging, luxurious, and fashionable. Start with a welcoming se
              detailedMessage = `Google API returned a non-JSON error: ${responseText}`;
         }
         return new Response(JSON.stringify({ error: `Google API failed with status ${geminiResponse.status}. Details: ${detailedMessage}` }), {
-            status: 502, // Bad Gateway
+            status: 502,
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         });
     }
 
-    // 8. Extract the style advice text from the response
     const responseData = JSON.parse(responseText);
-    const styleAdvice = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    if (!styleAdvice) {
-      console.error("Invalid response structure from Google API:", responseData);
-      return new Response(JSON.stringify({ error: 'Could not find the style advice in the Google API response.' }), {
+    // Find the part in the response that contains the image data
+    const imagePart = responseData.candidates?.[0]?.content?.parts?.find(part => part.inline_data);
+
+    if (!imagePart) {
+      console.error("Invalid response structure from Google API - no image part found:", responseData);
+      return new Response(JSON.stringify({ error: 'Could not find the edited image in the Google API response.' }), {
         status: 500,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
       });
     }
     
-    // 9. Send the successful response back to the client
-    return new Response(JSON.stringify({ styleAdvice: styleAdvice }), {
+    const newImageBase64 = imagePart.inline_data.data;
+
+    return new Response(JSON.stringify({ newImageBase64: newImageBase64 }), {
       status: 200,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('An unexpected error occurred in the Cloudflare function:', error);
+    console.error('Unexpected error in Cloudflare function:', error);
     return new Response(JSON.stringify({ error: `An unexpected server error occurred: ${error.message}` }), {
         status: 500,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
