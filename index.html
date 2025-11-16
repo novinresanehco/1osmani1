@@ -37,7 +37,7 @@
         background-attachment: fixed;
         color: var(--color-light-gray);
         position: relative;
-        font-family: var(--font-persian) !important; /* Ensure Vazirmatn is the default for all text */
+        font-family: var(--font-persian) !important;
     }
     
     body::before {
@@ -51,9 +51,17 @@
         z-index: -1;
     }
 
-    /* Apply Lalezar font specifically to the main English header */
     header h1 {
         font-family: var(--font-english) !important;
+    }
+    
+    .markdown-output p {
+        margin-bottom: 1rem;
+    }
+    .markdown-output ul {
+        list-style-type: disc;
+        margin-left: 1.5rem;
+        margin-bottom: 1rem;
     }
 </style>
 </head>
@@ -62,41 +70,42 @@
     <script type="module">
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import { marked } from 'https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js';
 
 // --- START: constants.ts ---
 const EYEGLASS_BRANDS = [
     {
         brandName: "Ray-Ban",
         models: [
-            { name: "Aviator (Sunglass)", prompt: "Place a pair of classic Ray-Ban Aviator sunglasses (model 3025) with a gold metal frame and dark green G-15 lenses on the person's face. Ensure the glasses fit realistically and naturally, resting on the bridge of the nose. The perspective and lighting should match the original photo." },
-            { name: "Wayfarer (Sunglass)", prompt: "Place a pair of iconic Ray-Ban Wayfarer sunglasses (model 2140) in polished black acetate with green G-15 lenses on the person's face. They should fit realistically, matching the photo's perspective and lighting." },
-            { name: "Clubmaster (Optical)", prompt: "Place a pair of Ray-Ban Clubmaster eyeglasses with a black browline, gold metal rims, and clear prescription lenses on the person's face. Ensure a natural and realistic fit." },
-            { name: "Round Metal (Optical)", prompt: "Place a pair of Ray-Ban Round Metal eyeglasses (model RX3447V) with a thin gold frame and clear prescription lenses on the person's face. The fit should be realistic and match the lighting of the photo." }
+            { name: "Aviator (Sunglass)", prompt: "classic Ray-Ban Aviator sunglasses (model 3025) with a gold metal frame and dark green G-15 lenses" },
+            { name: "Wayfarer (Sunglass)", prompt: "iconic Ray-Ban Wayfarer sunglasses (model 2140) in polished black acetate with green G-15 lenses" },
+            { name: "Clubmaster (Optical)", prompt: "Ray-Ban Clubmaster eyeglasses with a black browline and gold metal rims" },
+            { name: "Round Metal (Optical)", prompt: "Ray-Ban Round Metal eyeglasses (model RX3447V) with a thin gold frame" }
         ]
     },
     {
         brandName: "Oakley",
         models: [
-            { name: "Holbrook (Sunglass)", prompt: "Place a pair of Oakley Holbrook sunglasses with a matte black frame and Prizm Sapphire Iridium lenses on the person's face. The glasses should look sporty and fit realistically, matching the photo's lighting and perspective." },
-            { name: "Sutro (Sunglass)", prompt: "Place a pair of large, shield-style Oakley Sutro sunglasses with a black frame and Prizm Road lens on the person's face. Ensure a realistic, performance-oriented fit." },
-            { name: "Holbrook (Optical)", prompt: "Place a pair of Oakley Holbrook eyeglasses with a matte black frame and clear prescription lenses on the person's face. Ensure the glasses fit realistically and naturally, matching the photo's perspective." },
-            { name: "Metalink (Optical)", prompt: "Place a pair of Oakley Metalink eyeglasses with a satin black rectangular frame and clear prescription lenses on the person's face for a sleek, modern look. The fit should be natural and realistic." }
+            { name: "Holbrook (Sunglass)", prompt: "Oakley Holbrook sunglasses with a matte black frame and Prizm Sapphire Iridium lenses" },
+            { name: "Sutro (Sunglass)", prompt: "large, shield-style Oakley Sutro sunglasses with a black frame and Prizm Road lens" },
+            { name: "Holbrook (Optical)", prompt: "Oakley Holbrook eyeglasses with a matte black frame" },
+            { name: "Metalink (Optical)", prompt: "Oakley Metalink eyeglasses with a satin black rectangular frame" }
         ]
     },
     {
         brandName: "Gucci",
         models: [
-            { name: "Square Sunglass", prompt: "Place a pair of oversized Gucci square sunglasses in black acetate with the gold interlocking G logo on the temples and grey lenses on the person's face. The look should be luxurious and fashionable, with a realistic fit." },
-            { name: "Aviator Sunglass", prompt: "Place a pair of Gucci aviator sunglasses with a gold metal frame, a double bridge, and brown gradient lenses on the person's face. Ensure they have a high-fashion, realistic appearance." },
-            { name: "Rectangular Optical", prompt: "Place a pair of Gucci rectangular eyeglasses in a shiny black acetate frame with clear prescription lenses on the person's face. Ensure a sophisticated and realistic fit." },
+            { name: "Square Sunglass", prompt: "oversized Gucci square sunglasses in black acetate with the gold interlocking G logo" },
+            { name: "Aviator Sunglass", prompt: "Gucci aviator sunglasses with a gold metal frame and a double bridge" },
+            { name: "Rectangular Optical", prompt: "Gucci rectangular eyeglasses in a shiny black acetate frame" },
         ]
     },
     {
         brandName: "Persol",
         models: [
-            { name: "649 (Sunglass)", prompt: "Place a pair of iconic Persol 649 sunglasses in a havana tortoise-shell acetate frame with green lenses and the signature silver arrow hinge on the person's face. The fit should be timeless, elegant, and realistic." },
-            { name: "714 (Sunglass)", prompt: "Place a pair of foldable Persol 714 'Steve McQueen' sunglasses in a light havana frame with blue lenses on the person's face. Ensure they look classic and fit naturally." },
-            { name: "Cellor (Optical)", prompt: "Place a pair of Persol Cellor eyeglasses with a black acetate browline and metal lower rims with clear lenses on the person's face. The fit should be sophisticated and realistic." },
+            { name: "649 (Sunglass)", prompt: "iconic Persol 649 sunglasses in a havana tortoise-shell acetate frame with the signature silver arrow hinge" },
+            { name: "714 (Sunglass)", prompt: "foldable Persol 714 'Steve McQueen' sunglasses in a light havana frame" },
+            { name: "Cellor (Optical)", prompt: "Persol Cellor eyeglasses with a black acetate browline and metal lower rims" },
         ]
     }
 ];
@@ -104,8 +113,7 @@ const EYEGLASS_BRANDS = [
 
 
 // --- START: services/geminiService.ts ---
-const editImageWithGemini = async (image, prompt) => {
-    // This now points to the relative path of the Cloudflare Pages Function.
+const getStyleAdvice = async (image, prompt) => {
     const WORKER_URL = '/api';
 
     try {
@@ -121,11 +129,9 @@ const editImageWithGemini = async (image, prompt) => {
             }),
         });
         
-        // First check if the response is OK.
         if (!response.ok) {
             let errorMsg = `خطای سرور: ${response.status}`;
             try {
-                // Try to get a more specific error from the body
                 const errorData = await response.json();
                 if (errorData.error) {
                     errorMsg = errorData.error;
@@ -138,11 +144,11 @@ const editImageWithGemini = async (image, prompt) => {
 
         const data = await response.json();
         
-        if (!data.newBase64) {
-            throw new Error('پاسخ سرور فاقد داده تصویر بود.');
+        if (!data.styleAdvice) {
+            throw new Error('پاسخ سرور فاقد مشاوره استایل بود.');
         }
 
-        return data.newBase64; // Return only the base64 string
+        return data.styleAdvice;
 
     } catch (err) {
         console.error("Worker fetch error:", err);
@@ -166,166 +172,28 @@ const Loader = ({ message }) => {
 };
 // --- END: components/Loader.tsx ---
 
-// --- START: components/ImageComparator.tsx ---
-const ImageComparator = ({ original, edited }) => {
-  const [sliderPosition, setSliderPosition] = useState(50);
-  const imageContainerRef = useRef(null);
 
-  const handleMove = useCallback((clientX) => {
-    if (!imageContainerRef.current) return;
-    const rect = imageContainerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const percent = (x / rect.width) * 100;
-    setSliderPosition(percent);
-  }, []);
-
-  const handleTouchMove = useCallback((e) => {
-    handleMove(e.touches[0].clientX);
-  }, [handleMove]);
-
-  const handleMouseMove = useCallback((e) => {
-    if (e.buttons !== 1) return;
-    handleMove(e.clientX);
-  }, [handleMove]);
-
-  return (
-    React.createElement('div', { 
-        ref: imageContainerRef,
-        className: "relative w-full max-w-2xl mx-auto aspect-square overflow-hidden rounded-lg shadow-2xl select-none cursor-ew-resize group border-2 border-amber-500/30",
-        onMouseMove: handleMouseMove,
-        onTouchMove: handleTouchMove
-    },
-      React.createElement('img', {
-        src: original,
-        alt: "Original",
-        className: "absolute top-0 left-0 w-full h-full object-cover pointer-events-none",
-        draggable: "false"
-      }),
-      React.createElement('div', {
-        className: "absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none",
-        style: { clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }
-      },
-        React.createElement('img', {
-          src: edited,
-          alt: "Edited",
-          className: "absolute top-0 left-0 w-full h-full object-cover pointer-events-none",
-          draggable: "false"
-        })
-      ),
-      React.createElement('div', {
-        className: "absolute top-0 h-full w-1 bg-amber-400/80 pointer-events-none transition-opacity duration-300 opacity-70 group-hover:opacity-100",
-        style: { left: `${sliderPosition}%`, transform: 'translateX(-50%)' }
-      },
-        React.createElement('div', { className: "absolute top-1/2 -translate-y-1/2 -left-4 w-9 h-9 bg-black/50 border-2 border-amber-400 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm" },
-            React.createElement('i', { className: "fa-solid fa-arrows-left-right text-amber-400" })
-        )
-      )
-    )
-  );
-};
-// --- END: components/ImageComparator.tsx ---
-
-
-// --- START: components/PromptInput.tsx ---
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-
-if (recognition) {
-    recognition.continuous = false;
-    recognition.lang = 'fa-IR';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-}
-
-const PromptInput = ({ prompt, setPrompt, onSubmit, isLoading, setError }) => {
-    const [isListening, setIsListening] = useState(false);
-
-    useEffect(() => {
-        if (!recognition) return;
-
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            setPrompt(transcript);
-        };
-        
-        recognition.onerror = (event) => {
-            console.error('Speech recognition error', event.error);
-            if (event.error === 'no-speech') {
-                setError('صدایی شناسایی نشد. لطفاً نزدیک‌تر به میکروفون صحبت کنید و دوباره امتحان کنید.');
-            } else if (event.error === 'not-allowed') {
-                setError('دسترسی به میکروفون مجاز نیست. لطفاً در تنظیمات مرورگر خود دسترسی را فعال کنید.');
-            } else {
-                setError(`خطایی در تشخیص گفتار رخ داد: ${event.error}`);
-            }
-            setIsListening(false);
-        };
-
-        recognition.onend = () => {
-            setIsListening(false);
-        };
-
-    }, [setPrompt, setError]);
-    
-    const handleVoiceInput = () => {
-        if (!recognition) {
-            setError("مرورگر شما از تشخیص گفتار پشتیبانی نمی‌کند.");
-            return;
-        }
-        if (isListening) {
-            recognition.stop();
-            setIsListening(false);
-        } else {
-            try {
-                setError(null);
-                recognition.start();
-                setIsListening(true);
-            } catch(e) {
-                console.error("Could not start recognition", e);
-                setIsListening(false);
-                setError("امکان شروع تشخیص گفتار وجود ندارد. لطفاً لحظه‌ای صبر کرده و دوباره امتحان کنید.");
-            }
-        }
-    };
-    
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        onSubmit();
-    }
-
+// --- START: components/StyleAdviceCard.tsx ---
+const StyleAdviceCard = ({ advice, imageUrl }) => {
+    const parsedHtml = marked(advice);
     return (
-        React.createElement('form', { onSubmit: handleSubmit, className: "flex items-center gap-2 w-full" },
-            React.createElement('button', {
-                type: "button",
-                onClick: handleVoiceInput,
-                disabled: isLoading || !recognition,
-                className: `flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 border-2
-                    ${isListening ? 'bg-red-600 border-red-400 animate-pulse' : 'bg-black/50 border-amber-500/50 hover:border-amber-400 hover:bg-amber-400/20'}
-                    ${isLoading || !recognition ? 'bg-gray-700 border-gray-600 cursor-not-allowed' : ''}`,
-                'aria-label': isListening ? "توقف ضبط صدا" : "شروع ضبط صدا"
-            },
-                React.createElement('i', { className: `fas ${isListening ? 'fa-microphone-slash' : 'fa-microphone'} text-xl text-amber-400` })
-            ),
-            React.createElement('input', {
-                type: "text",
-                value: prompt,
-                onChange: (e) => setPrompt(e.target.value),
-                placeholder: "مثلا: فریم را قرمز کن...",
-                dir: "rtl",
-                disabled: isLoading,
-                className: "w-full h-12 px-4 bg-black/50 border-2 border-amber-500/50 rounded-full focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:outline-none transition-shadow text-white placeholder-gray-400"
+        React.createElement('div', {className: "w-full max-w-4xl mx-auto flex flex-col md:flex-row items-center md:items-start gap-6 bg-black/70 border border-amber-500/30 rounded-lg p-6 backdrop-blur-sm"},
+            React.createElement('img', {
+                src: imageUrl,
+                alt: "Your photo",
+                className: "w-48 h-48 object-cover rounded-lg shadow-lg border-2 border-amber-500/50"
             }),
-            React.createElement('button', {
-                type: "submit",
-                disabled: isLoading || !prompt,
-                className: "flex-shrink-0 w-12 h-12 bg-amber-500 hover:bg-amber-400 rounded-full flex items-center justify-center disabled:bg-gray-700 disabled:border-2 disabled:border-gray-600 disabled:cursor-not-allowed transition-colors",
-                'aria-label': "ارسال دستور"
-            },
-                React.createElement('i', { className: "fas fa-arrow-up text-xl text-black" })
+            React.createElement('div', {className: "text-right flex-1"},
+                React.createElement('h3', {className: "text-2xl font-bold text-amber-400 mb-4 border-b-2 border-amber-500/30 pb-2"}, "مشاوره استایل شما"),
+                React.createElement('div', {
+                    className: "text-gray-200 leading-relaxed markdown-output",
+                    dangerouslySetInnerHTML: { __html: parsedHtml }
+                })
             )
         )
     );
 };
-// --- END: components/PromptInput.tsx ---
+// --- END: components/StyleAdviceCard.tsx ---
 
 
 // --- START: App.tsx ---
@@ -335,7 +203,7 @@ const fileToImageData = async (file) => {
         reader.onload = () => {
             const base64String = reader.result.split(',')[1];
             if (base64String) {
-                resolve({ base64: base64String, mimeType: file.type });
+                resolve({ base64: base64String, mimeType: file.type, url: reader.result });
             } else {
                 reject(new Error("Failed to read file as base64"));
             }
@@ -346,9 +214,8 @@ const fileToImageData = async (file) => {
 };
 
 const App = () => {
-    const [originalImage, setOriginalImage] = useState(null);
-    const [editedImage, setEditedImage] = useState(null);
-    const [prompt, setPrompt] = useState('');
+    const [userImage, setUserImage] = useState(null);
+    const [styleAdvice, setStyleAdvice] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState(null);
@@ -361,10 +228,10 @@ const App = () => {
         const file = event.target.files?.[0];
         if (file) {
             setError(null);
+            setStyleAdvice('');
             try {
                 const imageData = await fileToImageData(file);
-                setOriginalImage(imageData);
-                setEditedImage(imageData);
+                setUserImage(imageData);
             } catch (err) {
                 setError("Could not process the image file.");
                 console.error(err);
@@ -372,32 +239,32 @@ const App = () => {
         }
     };
 
-    const processImageEdit = useCallback(async (editPrompt) => {
-        const baseImage = editedImage || originalImage;
-        if (!baseImage) {
+    const processStyleRequest = useCallback(async (stylePrompt) => {
+        if (!userImage) {
             setError("لطفاً ابتدا یک تصویر آپلود کنید.");
             return;
         }
         
         setIsLoading(true);
-        setLoadingMessage('جادوی هوش مصنوعی در حال انجام...');
+        setLoadingMessage('هوش مصنوعی در حال تحلیل استایل شماست...');
         setError(null);
+        setStyleAdvice('');
 
         try {
-            const newBase64 = await editImageWithGemini(baseImage, editPrompt);
-            setEditedImage({ ...baseImage, base64: newBase64 });
+            const adviceText = await getStyleAdvice(userImage, stylePrompt);
+            setStyleAdvice(adviceText);
         } catch (err) {
-            setError(err.message || "Failed to edit image. Please try again.");
+            setError(err.message || "Failed to get style advice. Please try again.");
             console.error(err);
         } finally {
             setIsLoading(false);
         }
-    }, [originalImage, editedImage]);
+    }, [userImage]);
 
     const WelcomeScreen = () => (
         React.createElement('div', { className: "text-center p-8" },
             React.createElement('h1', { className: "text-5xl font-bold mb-4 text-amber-400" }, "SENATOR OPTICS"),
-            React.createElement('p', { className: "text-xl text-gray-300 mb-8" }, "عینک ایده‌آل خود را به صورت مجازی امتحان کنید"),
+            React.createElement('p', { className: "text-xl text-gray-300 mb-8" }, "مشاور استایل هوشمند عینک شما"),
             React.createElement('div', { className: "flex flex-col sm:flex-row justify-center items-center gap-4" },
                 React.createElement('button', { onClick: () => cameraInputRef.current?.click(), className: "w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 px-6 rounded-full flex items-center justify-center gap-3 transition-transform transform hover:scale-105" },
                     React.createElement('i', { className: "fas fa-camera text-xl" }),
@@ -424,14 +291,16 @@ const App = () => {
             React.createElement('main', { className: "flex-grow flex flex-col items-center justify-center" },
                 isLoading && React.createElement(Loader, { message: loadingMessage }),
                 error && React.createElement('div', { className: "bg-red-800 border border-red-600 text-white p-3 rounded-lg my-4 max-w-xl text-center", dir: "rtl" }, error),
-                !originalImage ? React.createElement(WelcomeScreen, null) : (
+                !userImage ? React.createElement(WelcomeScreen, null) : (
                     React.createElement('div', { className: "w-full flex flex-col items-center gap-6" },
-                        React.createElement('div', { className: "w-full max-w-2xl" },
-                           editedImage && React.createElement(ImageComparator, { original: `data:${originalImage.mimeType};base64,${originalImage.base64}`, edited: `data:${editedImage.mimeType};base64,${editedImage.base64}` })
-                        ),
+                        
+                        styleAdvice ? 
+                            React.createElement(StyleAdviceCard, { advice: styleAdvice, imageUrl: userImage.url }) :
+                            React.createElement('img', { src: userImage.url, alt: "Uploaded photo", className: "max-w-md w-full aspect-square object-cover rounded-lg shadow-2xl border-2 border-amber-500/30" }),
+
                         React.createElement('div', { className: "w-full max-w-4xl p-4 sm:p-6 bg-black/70 border border-amber-500/30 rounded-lg backdrop-blur-sm" },
                             React.createElement('div', { className: "w-full max-w-3xl mx-auto" },
-                                React.createElement('p', { className: "text-center text-gray-300 mb-4", dir: "rtl" }, "یک مدل آماده را انتخاب کنید یا درخواست خود را بنویسید:"),
+                                React.createElement('p', { className: "text-center text-gray-300 mb-4", dir: "rtl" }, "برای دریافت مشاوره استایل، یک مدل را انتخاب کنید:"),
                                 
                                 React.createElement('div', { className: "flex justify-center border-b border-amber-500/30 mb-4 flex-wrap" },
                                     EYEGLASS_BRANDS.map(brand => (
@@ -447,25 +316,17 @@ const App = () => {
                                     EYEGLASS_BRANDS.find(b => b.brandName === activeBrand)?.models.map(model => (
                                         React.createElement('button', { 
                                             key: model.name, 
-                                            onClick: () => processImageEdit(model.prompt), 
+                                            onClick: () => processStyleRequest(model.prompt), 
                                             disabled: isLoading, 
                                             className: "bg-black/50 border border-amber-500/50 hover:bg-amber-500/20 text-sm font-semibold py-2 px-4 rounded-full transition-colors disabled:bg-gray-800 disabled:text-gray-500 disabled:border-gray-700 disabled:cursor-not-allowed" 
                                         },
                                             model.name
                                         )
                                     ))
-                                ),
-
-                                React.createElement(PromptInput, { 
-                                    prompt: prompt, 
-                                    setPrompt: setPrompt, 
-                                    onSubmit: () => processImageEdit(prompt), 
-                                    isLoading: isLoading, 
-                                    setError: setError
-                                })
+                                )
                             ),
                             React.createElement('div', { className: "flex flex-col sm:flex-row gap-4 mt-6 justify-center" },
-                                React.createElement('button', { onClick: () => { setOriginalImage(null); setEditedImage(null); }, disabled: isLoading, className: "bg-red-800/80 hover:bg-red-700 border border-red-600 text-white font-bold py-3 px-6 rounded-full flex items-center justify-center gap-3 transition-colors" },
+                                React.createElement('button', { onClick: () => { setUserImage(null); setStyleAdvice(''); }, disabled: isLoading, className: "bg-red-800/80 hover:bg-red-700 border border-red-600 text-white font-bold py-3 px-6 rounded-full flex items-center justify-center gap-3 transition-colors" },
                                     React.createElement('i', { className: "fas fa-trash" }),
                                     React.createElement('span', null, "شروع مجدد")
                                 )
